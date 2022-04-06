@@ -8,15 +8,13 @@ const MAXHOUR = "23";
 const trenitalia = new Trenitalia();
 
 /*  Nota: Le soluzione ricevute possono essere duplicate!
-    TODO: Trovare il modo per collegare la soluzione al sito di Trenitalia
-    TODO: Implementare la possibilitaa'di scegliere o meno di avere cambi
-    TODO: 
+    TODO: Implementare la possibilita'di scegliere o meno di avere cambi
 */
 
 
 async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
-    days = 1; // Debug purpose ELIMINATE
+    days = 6; // Debug purpose ELIMINATE
     const stations_from = await trenitalia.autocomplete(stationFromName);
     const station_from = stations_from[0].name;
     const stations_to = await trenitalia.autocomplete(stationToName);
@@ -24,27 +22,27 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
     var startDate = moment(startDate);
     var dates = new Array();
-    var solutionsEachDay = new Object();
-    for (var i = 1; i <= days; i++) {
+    var solutionsArray = [];
+    for (let i = 0; i < days; i++) {
         //dates.push(startDate.add(1, 'days').format("DD/MM/YYYY"));
         let date = startDate.add(1, 'days').format("DD/MM/YYYY");
-        solutionsEachDay[date] = await getTrainsForTheDay(date);
+        solutionsArray[i] = getTrainsForTheDay(date);
     }
 
+    let solutionsByDay = {};
+    let dataArray = await Promise.all(solutionsArray);
+
+    for (let i = 0; i < days; i++) {
+        //dates.push(startDate.add(1, 'days').format("DD/MM/YYYY"));
+        let date = startDate.add(1, 'days').format("DD/MM/YYYY");
+        solutionsByDay[date] = dataArray[i];
+    }
+
+    return solutionsByDay;
 
 
-    // for (const date of dates) {
-    //     //solutionsPerDay[date] = await trenitalia.getOneWaySolutions(station_from, station_to, date, startHour, 1, 0, false, false, null);
-    //     //solutionsPerDay[date] = filterAndSort(solutionsPerDay[date]);
-    //     //tranformTimeToReadable(solutionsPerDay[date]);
 
-
-    // }
-    return solutionsEachDay;
-
-
-
-
+    // cerca i treni del giorno, gli filtra se sono a corsa unica, prende i migliori tre in base al prezzo
     async function getTrainsForTheDay(date) {
         console.log("Cercando i treni nel giorno: " + date);
         let hour = MINHOUR;
@@ -58,25 +56,25 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
             nReq++;
             let temp = await trenitalia.getOneWaySolutions(station_from, station_to, date, hour, 1, 0, false, false, null);
             daySolutions.push(temp);
-            let lastTrain = temp[temp.length-1];
+            let lastTrain = temp[temp.length - 1];
             hour = moment(lastTrain.departuretime).format("HH"); // get last hour of last result
-            if(moment(lastTrain.departuretime).format("DD/MM/YYYY") !== date)
+            if (moment(lastTrain.departuretime).format("DD/MM/YYYY") !== date)
                 isEndDay = true;
-            if(lastReqTrain != undefined && lastReqTrain.departuretime == lastTrain.departuretime){
+            if (lastReqTrain != undefined && lastReqTrain.departuretime == lastTrain.departuretime) {
                 throw 'Loop Detected! In getAlldayTrain() with date = ' + date;
             }
             lastReqTrain = lastTrain;
         }
 
-        daySolutions = uniqBy(daySolutions.flat(),(key) => key.trainlist[0].trainidentifier);
+        daySolutions = uniqBy(daySolutions.flat(), (key) => key.trainlist[0].trainidentifier);
         // Filtra i treni senza cambio e sorta i risultati per prezzo, poi aggiunge delle proprieta' nell oggetto per rendere leggibili i risultati
-        return tranformTimeToReadable(filterAndSort(daySolutions).slice(0,3));
-        
+        return tranformTimeToReadable(filterAndSort(daySolutions).slice(0, 3));
+
 
         // Funzione usata per ottenere array con valori unici
         function uniqBy(a, key) {
             var seen = {};
-            return a.filter(function(item) {
+            return a.filter(function (item) {
                 var k = key(item);
                 return seen.hasOwnProperty(k) ? false : (seen[k] = true);
             })
@@ -104,14 +102,16 @@ async function saveToJSON(nameFile, obj) {
     console.log("JSON file has been saved.");
 }
 
-function stampaSoluzione(soluzione){
-    console.log('---------------------');
-    console.log(`Treno da:\t${soluzione.origin}`);
-    console.log(`Treno a:\t${soluzione.destination}`);
-    console.log(`Partenza:\t${soluzione.readableDeparturetime}`);
-    console.log(`Arrivo: \t${soluzione.readableArrivaltime}`);
-    console.log(`Prezzo minimo:\t\x1b[31m${soluzione.minprice}\x1b[0m`);
-    console.log(`Durata: \t${soluzione.duration}`);
+function stampaSoluzione(soluzione) {
+    console.log('--------------------------');
+    // console.log(`Treno da:${soluzione.origin}`);
+    // console.log(`Treno a:${soluzione.destination}`);
+    console.log("Partenza:".padEnd(15) + `${soluzione.readableDeparturetime}`);
+    console.log("Arrivo:".padEnd(15) + `${soluzione.readableArrivaltime}`);
+    console.log("Prezzo min:".padEnd(15) + `\x1b[31m${soluzione.minprice}\x1b[0m`);
+    console.log("Durata:".padEnd(15) + `${soluzione.duration}`);
+    console.log("Treno:".padEnd(15) + `${soluzione.trainlist[0].trainidentifier}`);
+
     console.log("");
 }
 
@@ -119,18 +119,18 @@ function stampaSoluzione(soluzione){
 async function Main() {
     var startDate = Date();
     var date = new Date();
-    const corseTrovate = await getTrainsByDay("Bologna", "Foggia", new Date().setMonth(4), 1 );
+    const corseTrovate = await getTrainsByDay("Bologna", "Foggia", new Date().setMonth(4), 1);
     //saveToJSON("test/test.json", corseTrovate);
     for (giornata in corseTrovate) {
         let bestSoluzioniDelGiorno = corseTrovate[giornata]
         console.log("Giorno: " + giornata);
-        for(soluzione of bestSoluzioniDelGiorno){
+        for (soluzione of bestSoluzioniDelGiorno) {
             stampaSoluzione(soluzione);
         }
-        console.log("====================");
+        console.log("=========================");
     }
 
-    
+
 }
 
 
