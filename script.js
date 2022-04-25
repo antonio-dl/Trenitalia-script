@@ -7,24 +7,23 @@ const MINHOUR = "6";
 const MAXHOUR = "23";
 const trenitalia = new Trenitalia();
 
-/*  Nota: Le soluzione ricevute possono essere duplicate!
+/*  Nota: Le soluzione ricevute possono essere duplicate! (Problema risolto!)
+    Utilizzo di moment perche' il fuso orario non permette di usare new Date();
+    TODO: filtrare gli orari improponibili;
     TODO: Implementare la possibilita'di scegliere o meno di avere cambi
-*/
+    */
 
 
 async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
-    days = 6; // Debug purpose ELIMINATE
     const stations_from = await trenitalia.autocomplete(stationFromName);
     const station_from = stations_from[0].name;
     const stations_to = await trenitalia.autocomplete(stationToName);
     const station_to = stations_to[0].name;
 
-    var startDate = moment(startDate);
-    var dates = new Array();
+    let date = new moment(startDate);
     var solutionsArray = [];
     for (let i = 0; i < days; i++) {
-        //dates.push(startDate.add(1, 'days').format("DD/MM/YYYY"));
         let date = startDate.add(1, 'days').format("DD/MM/YYYY");
         solutionsArray[i] = getTrainsForTheDay(date);
     }
@@ -34,8 +33,8 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
     for (let i = 0; i < days; i++) {
         //dates.push(startDate.add(1, 'days').format("DD/MM/YYYY"));
-        let date = startDate.add(1, 'days').format("DD/MM/YYYY");
-        solutionsByDay[date] = dataArray[i];
+        let segnaposto = date.add(1, 'days').format("DD/MM/YYYY");
+        solutionsByDay[segnaposto] = dataArray[i];
     }
 
     return solutionsByDay;
@@ -54,7 +53,7 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
         // Necessario fare questi controlli per evitare loop infiniti
         while (nReq <= MAXREQUEST && parseInt(hour) < parseInt(MAXHOUR) && !isEndDay) {
             nReq++;
-            let temp = await trenitalia.getOneWaySolutions(station_from, station_to, date, hour, 1, 0, false, false, null);
+            let temp = await trenitalia.getOneWaySolutions(station_from, station_to, date, hour, 1, 0, true, false, null);
             daySolutions.push(temp);
             let lastTrain = temp[temp.length - 1];
             hour = moment(lastTrain.departuretime).format("HH"); // get last hour of last result
@@ -85,7 +84,8 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
 
 function filterAndSort(solutionsArray) {
-    return solutionsArray.filter(a => a.changesno == 0).sort((a, b) => a.originalPrice - b.originalPrice);
+    return solutionsArray.filter(a => a.saleable && a.changesno == 0 /*&& (parseInt(moment(a.departuretime).format("HH")) < parseInt(MAXHOUR))*/)
+    .sort((a, b) => a.originalPrice - b.originalPrice);
 }
 
 function tranformTimeToReadable(solutionsArray) {
@@ -117,18 +117,30 @@ function stampaSoluzione(soluzione) {
 
 /// MAIN
 async function Main() {
-    var startDate = Date();
-    var date = new Date();
-    const corseTrovate = await getTrainsByDay("Bologna", "Foggia", new Date().setMonth(4), 1);
+    var date = new Date(2022,4,18);
+    var startDate = moment(date);
+    const corseTrovate = await getTrainsByDay("Bologna", "Foggia", startDate, 10);
     //saveToJSON("test/test.json", corseTrovate);
+    let bestSolution;
+    let bestPrice = Number.MAX_SAFE_INTEGER;
     for (giornata in corseTrovate) {
         let bestSoluzioniDelGiorno = corseTrovate[giornata]
+        if(bestSoluzioniDelGiorno[0].minprice < bestPrice){
+            bestSolution = bestSoluzioniDelGiorno[0];
+            bestPrice = bestSoluzioniDelGiorno[0].minprice
+        }
         console.log("Giorno: " + giornata);
         for (soluzione of bestSoluzioniDelGiorno) {
             stampaSoluzione(soluzione);
         }
         console.log("=========================");
     }
+
+    console.log("########################");
+    console.log("\nMiglior soluzione\n");
+    console.log("########################");
+    stampaSoluzione(bestSolution);
+    
 
 
 }
