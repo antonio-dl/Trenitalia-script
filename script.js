@@ -14,7 +14,7 @@ const trenitalia = new Trenitalia();
     */
 
 
-async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
+async function getTrains(stationFromName, stationToName, startDate, days) {
 
     const stations_from = await trenitalia.autocomplete(stationFromName);
     const station_from = stations_from[0].name;
@@ -25,7 +25,7 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
     var solutionsArray = [];
     for (let i = 0; i < days; i++) {
         let date = startDate.add(1, 'days').format("DD/MM/YYYY");
-        solutionsArray[i] = getTrainsForTheDay(date);
+        solutionsArray[i] = getAllDayTrains(date);
     }
 
     let solutionsByDay = {};
@@ -42,7 +42,7 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
 
     // cerca i treni del giorno, gli filtra se sono a corsa unica, prende i migliori tre in base al prezzo
-    async function getTrainsForTheDay(date) {
+    async function getAllDayTrains(date) {
         console.log("Cercando i treni nel giorno: " + date);
         let hour = MINHOUR;
         let daySolutions = new Array();
@@ -53,14 +53,15 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
         // Necessario fare questi controlli per evitare loop infiniti
         while (nReq <= MAXREQUEST && parseInt(hour) < parseInt(MAXHOUR) && !isEndDay) {
             nReq++;
-            let temp = await trenitalia.getOneWaySolutions(station_from, station_to, date, hour, 1, 0, true, false, null);
+            let temp = await trenitalia.getOneWaySolutions(station_from, station_to, date, hour, 1, 0, false, false, null);
             daySolutions.push(temp);
             let lastTrain = temp[temp.length - 1];
             hour = moment(lastTrain.departuretime).format("HH"); // get last hour of last result
             if (moment(lastTrain.departuretime).format("DD/MM/YYYY") !== date)
                 isEndDay = true;
-            if (lastReqTrain != undefined && lastReqTrain.departuretime == lastTrain.departuretime) {
-                throw 'Loop Detected! In getAlldayTrain() with date = ' + date;
+            if (lastReqTrain != undefined && lastReqTrain.departuretime == lastTrain.departuretime) { // 5 risultati alla volta + piu' di 5 treni all' ora => loop infinito
+                console.warn(`Alcune soluzioni del giorno ${date} ore: ${hour} potrebbero essere state state scartate ( Grazie API di trenitalia >:D )`)
+                hour = moment(lastTrain.departuretime).add(1, "hours");
             }
             lastReqTrain = lastTrain;
         }
@@ -85,7 +86,7 @@ async function getTrainsByDay(stationFromName, stationToName, startDate, days) {
 
 function filterAndSort(solutionsArray) {
     return solutionsArray.filter(a => a.saleable && a.changesno == 0 /*&& (parseInt(moment(a.departuretime).format("HH")) < parseInt(MAXHOUR))*/)
-    .sort((a, b) => a.originalPrice - b.originalPrice);
+        .sort((a, b) => a.originalPrice - b.originalPrice);
 }
 
 function tranformTimeToReadable(solutionsArray) {
@@ -117,15 +118,17 @@ function stampaSoluzione(soluzione) {
 
 /// MAIN
 async function Main() {
-    var date = new Date(2022,4,18);
+    var date = new Date(2022, 4, 01);
     var startDate = moment(date);
-    const corseTrovate = await getTrainsByDay("Bologna", "Foggia", startDate, 10);
+    const corseTrovate = await getTrains("Bologna", "Foggia", startDate, 6);
     //saveToJSON("test/test.json", corseTrovate);
+
+
     let bestSolution;
     let bestPrice = Number.MAX_SAFE_INTEGER;
     for (giornata in corseTrovate) {
         let bestSoluzioniDelGiorno = corseTrovate[giornata]
-        if(bestSoluzioniDelGiorno[0].minprice < bestPrice){
+        if (bestSoluzioniDelGiorno[0].minprice < bestPrice) {
             bestSolution = bestSoluzioniDelGiorno[0];
             bestPrice = bestSoluzioniDelGiorno[0].minprice
         }
@@ -140,7 +143,7 @@ async function Main() {
     console.log("\nMiglior soluzione\n");
     console.log("########################");
     stampaSoluzione(bestSolution);
-    
+
 
 
 }
