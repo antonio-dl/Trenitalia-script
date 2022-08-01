@@ -118,9 +118,9 @@ function stampaSoluzione(soluzione) {
 
 /// MAIN
 async function Main() {
-    var date = new Date(2022, 4, 01);
+    var date = new Date(2022, 1, 01);
     var startDate = moment(date);
-    const corseTrovate = await getTrains("Bologna", "Foggia", startDate, 6);
+    const corseTrovate = await getTrains("Bologna", "Milano", startDate, 6);
     //saveToJSON("test/test.json", corseTrovate);
 
 
